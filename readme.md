@@ -34,10 +34,7 @@ Vigilate requires:
 
 ## Run
 
-1) Run `cp database.yml.example database.yml`
-2) Run for Mac/Linux `cp run.sh.example run.sh` and `chmod +x run.sh`
-3) Run database migrations `soda migrate`
-3) Make sure ipê is running (if you're using ipê):
+First, make sure ipê is running (if you're using ipê):
 
 On Mac/Linux
 ~~~
