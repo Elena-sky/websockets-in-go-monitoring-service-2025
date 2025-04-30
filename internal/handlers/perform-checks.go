@@ -59,6 +59,7 @@ func (repo *DBRepo) ScheduledCheck(hostServiceID int) {
 func (repo *DBRepo) updateHostServiceStatusCount(h models.Host, hs models.HostService, newStatus, msg string) {
 	// update host service record in db with status and last check
 	hs.Status = newStatus
+	hs.LastMessage = msg
 	hs.LastCheck = time.Now()
 	err := repo.DB.UpdateHostService(hs)
 	if err != nil {
@@ -110,8 +111,30 @@ func (repo *DBRepo) TestCheck(w http.ResponseWriter, r *http.Request) {
 	// test the service
 	newStatus, msg := repo.testServiceForHost(h, hs)
 
+	// save event
+	event := models.Event{
+		EventType:     newStatus,
+		HostServiceID: hs.ID,
+		HostID:        h.ID,
+		ServiceName:   hs.Service.ServiceName,
+		HostName:      hs.HostName,
+		Message:       msg,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+	err = repo.DB.InsertEvent(event)
+	if err != nil {
+		log.Println(err)
+	}
+
+	// broadcast service status changed event
+	if newStatus != hs.Status {
+		repo.pushStatusChangedEvent(h, hs, newStatus)
+	}
+
 	// update the host service in the database with status (if changed) and last check
 	hs.Status = newStatus
+	hs.LastMessage = msg
 	hs.LastCheck = time.Now()
 	hs.UpdatedAt = time.Now()
 
@@ -120,8 +143,6 @@ func (repo *DBRepo) TestCheck(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		okay = false
 	}
-
-	// broadcast service status changed event
 
 	var resp jsonResp
 
@@ -161,6 +182,22 @@ func (repo *DBRepo) testServiceForHost(h models.Host, hs models.HostService) (st
 	// broadcast to clients if appropriate
 	if hs.Status != newStatus {
 		repo.pushStatusChangedEvent(h, hs, newStatus)
+		log.Println("Updating host services to last message", msg)
+		// save event
+		event := models.Event{
+			EventType:     newStatus,
+			HostServiceID: hs.ID,
+			HostID:        h.ID,
+			ServiceName:   hs.Service.ServiceName,
+			HostName:      hs.HostName,
+			Message:       msg,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
+		}
+		err := repo.DB.InsertEvent(event)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
 	repo.pushScheduleChangedEvent(hs, newStatus)
